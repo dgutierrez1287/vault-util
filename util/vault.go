@@ -53,7 +53,7 @@ func LoadSecrets(client *vault.Client, kvVersion string ,secrets *VaultSecrets) 
 
     var normalizedSecretPath string
     if kvVersion == "v2" {
-      normalizedSecretPath = secret.SecretKey + "/data" + secret.SecretPath
+      normalizedSecretPath = secret.SecretKey + "/data/" + secret.SecretPath
     } else {
       normalizedSecretPath = secret.VaultKey
     }
