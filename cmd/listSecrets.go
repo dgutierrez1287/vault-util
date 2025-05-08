@@ -5,30 +5,25 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/dgutierrez1287/vault-util/app"
 	"github.com/dgutierrez1287/vault-util/logger"
-  "github.com/dgutierrez1287/vault-util/app"
 	"github.com/dgutierrez1287/vault-util/util"
-
 	"github.com/spf13/cobra"
 )
 
-var secretsFile string
-var kvVersion string
-var bulkLoadCmd = &cobra.Command {
-  Use: "bulk-load",
-  Short: "bulk creates/updates secrets from a json file to vault",
-  Long: "bulk creates/updates secrets from a json file to vault",
+var listSecretsCmd = &cobra.Command{
+  Use: "list-secrets",
+  Short: "Lists secrets for a mount",
+  Long: "Lists secrets for mount",
   Run: func(cmd *cobra.Command, args []string) {
-    var machineReadableOutput app.BulkActionOutput
-    var secretsAdded []string
-    var secretErrors []app.SecretActionError
+    var machineReadableOutput app.SecretListOutput
     var vaultInstance *app.VaultInstance
     var err error
-
+    
     if !machineOutput {
       fmt.Println(util.TitleString)
     }
-    
+
     // Get vault configuration from settings file
     if vaultName != "" {
       logger.LogInfo("Vault name passed, getting connection details from settings file")
@@ -61,54 +56,38 @@ var bulkLoadCmd = &cobra.Command {
       logger.LogErrorExit("Error getting vault client", 250, err)
     }
 
-    logger.LogInfo("Reading secrets from json file", "file", secretsFile)
-    secrets, err := app.ReadSecretsFromJson(secretsFile, vaultClient, ctx)
-
+    logger.LogInfo("Getting secret mount")
+    secretMount, err := app.NewSecretMount(mountName, "", "", "", vaultClient)
     if err != nil {
-      logger.LogErrorExit("Error reading secrets from json file", 250, err)
+      logger.LogErrorExit("Error getting secret mount details", 250, err)
     }
 
-    logger.LogInfo("Creating or updating secrets")
-    for name, secret := range secrets.Secrets {
-      logger.LogDebug("writing secret secret", "name", name)
-      err = secret.WriteSecret(vaultClient)
-
-      if err != nil {
-        logger.LogError("Error writing secret", "error", err)
-        secretErrors = append(secretErrors, app.SecretActionError{
-          VaultKey: secret.VaultKey,
-          Error: err,
-        })
-      } else {
-        logger.LogInfo("Secret created/updated")
-        secretsAdded = append(secretsAdded, name)
-      }
+    logger.LogInfo("Getting secrets")
+    secrets, err := secretMount.ListSecrets(vaultClient)
+    if err != nil {
+      logger.LogErrorExit("Error getting secrets for mount", 250, err)
     }
 
     logger.LogDebug("Outputing results")
     if machineOutput {
       machineReadableOutput.ExitCode = 0
-      machineReadableOutput.SecretsAdded = secretsAdded
-      machineReadableOutput.Errors = secretErrors
-
+      machineReadableOutput.Secrets = secrets
       output, eCode := machineReadableOutput.GetOutputJson()
       fmt.Println(output)
       os.Exit(eCode)
-    } else {
-      app.BulkActionConsoleOutput(secretsAdded, secretErrors, "added")
-      os.Exit(0)
-    }
+    } 
+
+    app.ListSecretsConsoleOutput(secrets, secretMount.Mount)
+    os.Exit(0)
   },
 }
 
 func init() {
-  // add command
-  RootCmd.AddCommand(bulkLoadCmd)
+  // Required command cli options
+  listSecretsCmd.MarkFlagRequired("secret-mount")
 
-  // secrets file
-  bulkLoadCmd.PersistentFlags().StringVarP(&secretsFile, "secrets-file", "", "", "The json file that contains the secrets to be loaded/updated")
-  bulkLoadCmd.MarkFlagRequired("secrets-file")
+  // Command specific cli options
+
+  // Add command 
+  RootCmd.AddCommand(listSecretsCmd)
 }
-
-
-
